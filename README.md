@@ -1,4 +1,6 @@
-```
+###  venv and jupyter-lab setup
+
+```bash
 cd ~/gem-cli-app/
 uv python install 3.12
 uv venv
@@ -20,3 +22,6 @@ VIRTUAL_ENV=$(pwd)/.venv uv run ipython kernel install   --user   --name=my_note
 
 jupyter-lab
 ```
+
+## TBD: Get FastAPi and Gemini CLI working in a Jupyter nodebook setup
+: 
