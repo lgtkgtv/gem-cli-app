@@ -1,3 +1,4 @@
+```
 cd ~/gem-cli-app/
 uv python install 3.12
 uv venv
@@ -18,3 +19,4 @@ VIRTUAL_ENV=$(pwd)/.venv uv run ipython kernel install   --user   --name=my_note
 # uv run ipython kernel install --user --name=my_notebook --display-name "my_notebook"
 
 jupyter-lab
+```
