@@ -1,0 +1,186 @@
+THREAT MODEL AND MITIGATIONS FOR GEMINI CLI + MCP
+=================================================
+
+Core Risk:
+- The AI agent acts as a "confused deputy."
+- MCP servers expand attack surface by bridging local system and external services.
+
+Primary Threats:
+- Malicious prompts (prompt injection).
+- Compromised or malicious MCP servers.
+- Insider configuration of unsafe servers.
+- Command injection leading to shell execution.
+- Data exfiltration via tool chaining.
+- Privilege escalation through higher-trust servers.
+- Supply chain risks from third-party MCP servers.
+- Insecure storage of API keys and credentials.
+
+Mitigation Principles:
+1. Authorization & Least Privilege
+   - Always require human approval for high-risk actions.
+   - Restrict servers to specific dirs/APIs (least privilege).
+   - Scope permissions narrowly per task.
+
+2. Secure Coding for MCP Servers
+   - Validate/sanitize all inputs, avoid shell=True.
+   - Store secrets in env vars or vaults, never in code.
+   - Log all privileged tool calls (who, what, params).
+   - Run servers in containers for isolation.
+
+3. Supply Chain Security
+   - Trust only vetted/audited MCP servers.
+   - Pin versions to prevent malicious updates.
+   - Scan dependencies regularly (SCA).
+
+4. Operational Security
+   - Monitor/audit logs for abnormal tool/API use.
+   - Keep Gemini CLI + MCP servers patched.
+   - Embed security tests (prompt injection, secrets exposure) into CI/CD.
+
+Key Takeaway:
+
+Use human approval, least privilege, vetted components, and continuous monitoring/testing.  
+Without layered defenses, MCP integration can lead to data loss, privilege escalation, or full system compromise.
+
+---
+
+
+# Best Practices for Validating Inputs to MCP Servers
+
+Validating inputs to Model Context Protocol (MCP) servers is critical for ensuring the security and reliability of AI agents interacting with external tools and services. Poor validation can lead to command injection, data exfiltration, and tool poisoning.
+
+---
+
+## 1. Implement Schema Validation
+- **Strict Schema Enforcement:** Define and enforce a JSON schema for all input parameters (types, formats, ranges).  
+- **Reject Malformed Requests:** Disallow requests with missing, invalid, or unexpected fields.  
+
+---
+
+## 2. Sanitize All Inputs
+- **Remove or Encode Suspicious Characters:** Strip or encode injection triggers (SQL injection, path traversal).  
+- **Normalize Input:** Convert inputs to a canonical form to avoid bypasses.  
+- **Enforce Strict Typing:** Ensure integers, strings, and formats match exactly what tools expect.  
+
+---
+
+## 3. Context-Based Validation
+- **Restrict by Context:** For file access, block `../` or absolute paths outside allowed dirs.  
+- **Semantic Checks:** Validate inputs make sense (e.g., a date field must be valid, not just correctly formatted).  
+
+---
+
+## 4. Safe Coding Practices
+- **Parameterized Queries:** Always use prepared statements for database access.  
+- **No String Concatenation for Commands:** Use `subprocess.run([...], shell=False)` or equivalent.  
+- **Secure File Handling:** Validate file paths and restrict access to approved directories only.  
+
+---
+
+## 5. Least Privilege
+- **Minimal Permissions:** Run MCP servers/tools with only the rights they need.  
+- **Restrict Resource Access:** Define explicit allow-lists for files, APIs, and networks.  
+
+---
+
+## 6. Logging and Monitoring
+- **Comprehensive Logging:** Record tool calls, inputs, outputs, timestamps, and approvals.  
+- **Anomaly Detection:** Monitor for unusual patterns (unexpected IPs, sensitive data transfers, excessive tool use).  
+
+---
+
+## 7. Supply Chain Security
+- **Trusted Sources Only:** Install MCP servers from vetted repositories.  
+- **Verify Integrity:** Check package signatures or hashes against known-good baselines.  
+- **Track Changes:** Monitor server updates and tools for unexpected or malicious functionality.  
+
+---
+
+### Key Takeaway
+Strong input validation combines **schema enforcement, sanitization, context awareness, least privilege, and supply chain trust**. These practices harden MCP servers against prompt injection, command injection, and data exfiltration.
+
+
+---
+
+
+# Sanitizing Techniques for Different Input Types in MCP Servers
+
+Different input types require specific sanitization strategies to prevent vulnerabilities. Below are examples tailored for MCP servers and AI agent integrations.
+
+---
+
+## 1. Textual Inputs (prompts, search queries)
+- **HTML Encoding:** Convert `< > & "` into safe HTML entities to prevent XSS.  
+  Example: `<script>alert('XSS')</script>` → `&lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;`
+- **Remove/Encode Injection Triggers:** Strip tokens like `</sys>` or code-like instructions.  
+- **Whitelist Allowed Characters:** Permit only alphanumerics, spaces, and limited punctuation. Reject SQL or shell patterns.  
+- **Escape for Context:** Escape quotes in SQL, shell, or other contexts.  
+  Example: Escape `'` as `''` for SQL.
+
+---
+
+## 2. File Paths
+- **Normalize Paths:** Resolve absolute paths with `realpath()` and block `../`.  
+- **Whitelist Characters:** Allow only safe characters (`[a-zA-Z0-9._-]`). Reject encodings or traversal sequences.  
+- **Validate Extensions:** Restrict to `.txt`, `.csv`, `.pdf`. Block `.exe`, `.dll`, etc.  
+- **Restrict Permissions:** Example: `chmod 644` for uploaded files.  
+- **Use Designated Directories:** Store uploads in isolated folders outside web root.
+
+---
+
+## 3. SQL Query Parameters
+- **Parameterized Queries:** Always separate SQL code from input.  
+  Example:  
+  ```sql
+  SELECT * FROM users WHERE username = ?
+  ```
+- **Whitelist Input:** Enforce correct types (integers, dates).  
+- **Stored Procedures:** Encapsulate SQL logic to restrict dynamic behavior.
+
+---
+
+## 4. Shell Command Arguments
+- **Whitelist Commands/Args:** Predefine allowed commands and arguments.  
+- **Avoid String Concatenation:**  
+  ❌ `os.system("cmd " + user_input)`  
+  ✅ `subprocess.run(["cmd", arg1], shell=False)`  
+- **Use Safe Libraries:** `subprocess.run()` in Python, never raw `exec()`.  
+- **Sandbox Execution:** Run in containers with minimal privileges.  
+- **Validate Arguments:** Check type, length, and characters.  
+- **Limit Output:** Cap buffer size to prevent flooding.
+
+---
+
+## 5. Numerical Inputs
+- **Data Type Validation:** Enforce numeric-only.  
+- **Range Checks:** Keep values within expected bounds.  
+- **Precision Control:** Restrict to integers or limited decimals.
+
+---
+
+## 6. HTML Output from MCP Servers
+- **Output Encoding:** Encode all special characters before browser rendering.  
+- **Strip Malicious Content:** Remove `<script>` and inline event handlers.  
+- **Use Sanitization Libraries:** Example: DOMPurify in JavaScript.  
+- **Content Filtering:** Remove special tokens or patterns that could mislead models.
+
+---
+
+## 7. File Uploads
+- **Strict File Type Validation:** Check true type (magic bytes), not just extension.  
+- **Sanitize Filenames:** Remove/encode dangerous characters.  
+- **Enforce File Size Limits:** Prevent DoS via oversized files.  
+- **Content Disarm & Reconstruction (CDR):** Rebuild uploaded files without active/malicious content.
+
+---
+
+### Key Takeaway
+Sanitization must be **multi-layered**:  
+- Validate input format and semantics.  
+- Use safe coding patterns.  
+- Apply restrictive whitelists.  
+- Sanitize both **client-side and server-side**.  
+
+Treat every input as hostile until proven safe.
+
+
